@@ -38,6 +38,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"bytes"
 
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2"
@@ -669,6 +670,7 @@ func (db *Dropbox) doRequest(method, path string, params *url.Values, receiver i
 		params.Set("locale", db.Locale)
 	}
 	rawurl = fmt.Sprintf("%s/%s?%s", db.APIURL, urlEncode(path), params.Encode())
+	fmt.Println(rawurl)
 	if request, err = http.NewRequest(method, rawurl, nil); err != nil {
 		return err
 	}
@@ -926,6 +928,46 @@ func (db *Dropbox) LatestCursor(prefix string, mediaInfo bool) (*Cursor, error) 
 
 	err := db.doRequest("POST", "delta/latest_cursor", params, &cur)
 	return &cur, err
+}
+
+type TemporaryLinkResponse struct {
+	Link 		string `json:"link"`
+}
+
+type LinkParams struct {
+	Path string `json:"path"`
+}
+
+func (db *Dropbox) GetTemporaryLink(path string) (string, error) {
+	var rv TemporaryLinkResponse
+	var lp LinkParams
+	lp.Path = path
+	
+	body, err := json.Marshal(lp)
+	if err != nil {
+		panic(err)
+	}
+	
+	req, err := http.NewRequest("POST", "https://api.dropboxapi.com/2/files/get_temporary_link", bytes.NewReader(body))
+	if err != nil { panic(err) }
+	
+	req.Header["Content-Type"] = []string{"application/json"}
+	
+	response, err := db.client().Do(req)
+	
+	data, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		panic(err)
+	}
+	
+	fmt.Println( bytes.NewBuffer(data).String() )
+	
+	err = json.Unmarshal( data, &rv)
+	if err != nil {
+		panic(err)
+	}
+	
+	return rv.Link, err
 }
 
 // SharedFolders returns the list of allowed shared folders.
